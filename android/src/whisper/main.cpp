@@ -15,12 +15,28 @@
 
 using json = nlohmann::json;
 
-char *jsonToChar(json jsonData) noexcept
+char *jsonToChar(json jsonData)
 {
-    std::string result = jsonData.dump();
-    char *ch = new char[result.size() + 1];
-    strcpy(ch, result.c_str());
-    return ch;
+    try
+    {
+        std::string result = jsonData.dump(
+            -1,
+            ' ',
+            false,
+            nlohmann::json::error_handler_t::replace
+        );
+
+        char *ch = new char[result.size() + 1];
+        strcpy(ch, result.c_str());
+        return ch;
+    }
+    catch (const std::exception &e)
+    {
+        std::string error = "{\"@type\":\"error\",\"message\":\"json serialization failed\"}";
+        char *ch = new char[error.size() + 1];
+        strcpy(ch, error.c_str());
+        return ch;
+    }
 }
 
 struct whisper_params

@@ -23,10 +23,26 @@ void print(std::string value)
 
 char *jsonToChar(json jsonData)
 {
-    std::string result = jsonData.dump();
-    char *ch = new char[result.size() + 1];
-    strcpy(ch, result.c_str());
-    return ch;
+    try
+    {
+        std::string result = jsonData.dump(
+            -1,
+            ' ',
+            false,
+            nlohmann::json::error_handler_t::replace  // 🔥 关键
+        );
+
+        char *ch = new char[result.size() + 1];
+        strcpy(ch, result.c_str());
+        return ch;
+    }
+    catch (const std::exception &e)
+    {
+        std::string error = "{\"@type\":\"error\",\"message\":\"json serialization failed\"}";
+        char *ch = new char[error.size() + 1];
+        strcpy(ch, error.c_str());
+        return ch;
+    }
 }
 
 std::string charToString(char *value)
@@ -334,7 +350,26 @@ extern "C"
 {
     char *request(char *body)
     {
-        json jsonBody = json::parse(body);
+        json jsonBody;
+        try
+        {
+            jsonBody = json::parse(body, nullptr, false);
+        }
+        catch (...)
+        {
+            json jsonError;
+            jsonError["@type"] = "error";
+            jsonError["message"] = "invalid json input";
+            return jsonToChar(jsonError);
+        }
+
+        if (jsonBody.is_discarded())
+        {
+            json jsonError;
+            jsonError["@type"] = "error";
+            jsonError["message"] = "invalid json format";
+            return jsonToChar(jsonError);
+        }
         json jsonResult;
 
         if (jsonBody["@type"] == "getTextFromWavFile")
@@ -351,7 +386,17 @@ extern "C"
 
         jsonResult["@type"] = "error";
         jsonResult["message"] = "method not found";
-        return jsonToChar(jsonResult);
+        try
+        {
+            return jsonToChar(transcribe(jsonBody));
+        }
+        catch (const std::exception &e)
+        {
+            json jsonError;
+            jsonError["@type"] = "error";
+            jsonError["message"] = "transcription failed";
+            return jsonToChar(jsonError);
+        }
     }
 
     int main()
